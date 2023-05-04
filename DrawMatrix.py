@@ -54,59 +54,27 @@ class DrawMatrix( OpenMayaUI.MPxLocatorNode ):
         nAttr = OpenMaya.MFnNumericAttribute()
 
         # 形状変更用のアトリビュート
-        DrawMatrix.input = nAttr.create('type', 'ty', OpenMaya.MFnNumericData.kFloat, 0)
+        DrawMatrix.size = nAttr.create('size', 'sz', OpenMaya.MFnNumericData.kFloat, 0)
         nAttr.writable = True
         nAttr.readable = False
         nAttr.keyable = True
 
-        # Rアトリビュート
-        DrawMatrix.red = nAttr.create('startX', 'x', OpenMaya.MFnNumericData.kFloat, 0.0)
+        # ベクトルの表示チェック
+        DrawMatrix.bool = nAttr.create( 'bool', 'bl', OpenMaya.MFnNumericData.kBoolean)
+        nAttr.writable = True
+        nAttr.keyable = True
+
+        # vetorアトリビュート
+        DrawMatrix.setVec = nAttr.create('setVector', 'setv', OpenMaya.MFnNumericData.k3Float, 0.0)
         nAttr.writable = True
         nAttr.readable = False
         nAttr.keyable = True
-
-        # Gアトリビュート
-        DrawMatrix.green = nAttr.create('startY', 'y', OpenMaya.MFnNumericData.kFloat, 0.0)
-        nAttr.writable = True
-        nAttr.readable = False
-        nAttr.keyable = True
-
-        # Bアトリビュート
-        DrawMatrix.bleu = nAttr.create('startZ', 'z', OpenMaya.MFnNumericData.kFloat, 0.0)
-        nAttr.writable = True
-        nAttr.readable = False
-        nAttr.keyable = True
-
-        # Rアトリビュート
-        DrawMatrix.endx = nAttr.create('endX', 'ex', OpenMaya.MFnNumericData.kFloat, 0.0)
-        nAttr.writable = True
-        nAttr.readable = False
-        nAttr.keyable = True
-
-        # Gアトリビュート
-        DrawMatrix.endy = nAttr.create('endY', 'ey', OpenMaya.MFnNumericData.kFloat, 0.0)
-        nAttr.writable = True
-        nAttr.readable = False
-        nAttr.keyable = True
-
-        # Bアトリビュート
-        DrawMatrix.endz = nAttr.create('endZ', 'ez', OpenMaya.MFnNumericData.kFloat, 0.0)
-        nAttr.writable = True
-        nAttr.readable = False
-        nAttr.keyable = True
-
-
-
-
+        nAttr.array = True
 
         # アトリビュートをセットする
-        DrawMatrix.addAttribute( DrawMatrix.input )
-        DrawMatrix.addAttribute( DrawMatrix.red )
-        DrawMatrix.addAttribute( DrawMatrix.green )
-        DrawMatrix.addAttribute( DrawMatrix.bleu )
-        DrawMatrix.addAttribute( DrawMatrix.endx )
-        DrawMatrix.addAttribute( DrawMatrix.endy )
-        DrawMatrix.addAttribute( DrawMatrix.endz )
+        DrawMatrix.addAttribute( DrawMatrix.size )
+        DrawMatrix.addAttribute( DrawMatrix.bool )
+        DrawMatrix.addAttribute( DrawMatrix.setVec)
 
         return True
         
@@ -114,18 +82,13 @@ class DrawMatrix( OpenMayaUI.MPxLocatorNode ):
 #=========================================
 class UserData( OpenMaya.MUserData ):
 
-    #DrawMatrixに渡すデータ
-    size = 0.0
     #-----------------------------------------------
     def __init__( self ):
         OpenMaya.MUserData.__init__( self, False )
-        self.datas = []
-        self.colorR = []
-        self.colorG = []
-        self.colorB = []
-        self.endX = []
-        self.endY = []
-        self.endZ = []
+        self.matrix = []
+        self.size = []
+        self.bool = []
+        self.vector = []
 #=========================================
 class DrawMatrixOverride( OpenMayaRender.MPxDrawOverride ):
     
@@ -142,9 +105,9 @@ class DrawMatrixOverride( OpenMayaRender.MPxDrawOverride ):
     def supportedDrawAPIs( self ):
 
         #DirectXを使用して描画する
-        return OpenMayaRender.MRenderer.kDirectX11
+        #return OpenMayaRender.MRenderer.kDirectX11
         #OpenGLを使用して描画する
-        #return OpenMayaRender.MRenderer.kOpenGL
+        return OpenMayaRender.MRenderer.kOpenGL
     #-----------------------------------------------
     def hasUIDrawables( self ):
         return True
@@ -173,15 +136,10 @@ class DrawMatrixOverride( OpenMayaRender.MPxDrawOverride ):
             newData = None
             if( oldData ):
                 newData = oldData
-                newData.datas = []
-                newData.colorR = []
-                newData.colorG = []
-                newData.colorB = []
-                newData.endX = []
-                newData.endY = []
-                newData.endZ = []
-
-
+                newData.matrix = []
+                newData.size = []
+                newData.bool = []
+                newData.vector = []
             else:
                 newData = UserData()
             
@@ -189,90 +147,95 @@ class DrawMatrixOverride( OpenMayaRender.MPxDrawOverride ):
             thisNode = objPath.node()
             fnNode = OpenMaya.MFnDependencyNode( thisNode )
 
-            # typeアトリビュートの情報を取得
-            typePlug = fnNode.findPlug( 'type', False ).asFloat()
-            newData.datas.append(typePlug)
-            
-            #RGBの情報を取得
-            colorPlugR = fnNode.findPlug( 'startX', False ).asFloat()
-            newData.colorR.append(colorPlugR)
-            colorPlugG = fnNode.findPlug( 'startY', False ).asFloat()
-            newData.colorG.append(colorPlugG)
-            colorPlugB = fnNode.findPlug( 'startZ', False ).asFloat()
-            newData.colorB.append(colorPlugB)
 
-            #RGBの情報を取得
-            colorPlugR = fnNode.findPlug( 'endX', False ).asFloat()
-            newData.endX.append(colorPlugR)
-            colorPlugG = fnNode.findPlug( 'endY', False ).asFloat()
-            newData.endY.append(colorPlugG)
-            colorPlugB = fnNode.findPlug( 'endZ', False ).asFloat()
-            newData.endZ.append(colorPlugB)
+            # worldMatrixアトリビュートの情報を取得
+            plugs_mtrx = fnNode.findPlug("worldMatrix", True )
+            plug_mtrx = plugs_mtrx.elementByLogicalIndex(0)
+            omtrxdata = plug_mtrx.asMObject()
+            mmtrxdata = OpenMaya.MFnMatrixData(omtrxdata)
+            # matrixとして扱えるようにする
+            mmtrx = mmtrxdata.matrix()
+            newData.matrix.append(mmtrx)
+
+            # boolアトリビュートの情報を取得
+            boolPlug = fnNode.findPlug( 'bool', False ).asBool()
+            newData.bool.append(boolPlug)
+
+            # sizeアトリビュートの情報を取得
+            typePlug = fnNode.findPlug( 'size', False ).asFloat()
+            newData.size.append(typePlug)
+            arry_data = fnNode.findPlug( 'setVector', False )
+            arry_value = arry_data.numElements()
+            #vec3として扱えるようにする
+            for index in range(arry_value):
+                elementPlug = arry_data.elementByPhysicalIndex(index)
+                xvec = elementPlug.child(0).asFloat()
+                yvec = elementPlug.child(1).asFloat()
+                zvec = elementPlug.child(2).asFloat()
+                newData.vector.append([xvec,yvec,zvec])
             return newData
 
         return None
     
     #-----------------------------------------------
     def addUIDrawables( self, objPath, drawManager, frameContext, data ):
-
-        # ベースメッシュのデータが空でなければ、描画処理を実行する
-        if data.datas != []:
         
-            value = data.datas[0]
-            color_r = data.colorR[0]
-            color_g = data.colorG[0]
-            color_b = data.colorB[0]
-            ex = data.endX[0]
-            ey = data.endY[0]
-            ez = data.endZ[0]
-            # ボックスの描画処理   
+        # 更新されたデータを取得
+        matrix = data.matrix[0]
+        value = data.size[0]
+        bool = data.bool[0]
+        vetor = data.vector
+
+        # matrixの描画処理   
+        # X軸
+        drawManager.beginDrawable()
+        color = OpenMaya.MColor([1.0,0.0,0.0])
+        drawManager.setColor( color )
+        drawManager.line(OpenMaya.MPoint(0.0,0.0,0.0,1),
+        OpenMaya.MPoint(1.0+value,0.0,0.0,1)) 
+        drawManager.endDrawable()
+
+        # Y軸 
+        drawManager.beginDrawable()
+        color = OpenMaya.MColor([0.0,1.0,0.0])
+        drawManager.setColor( color )
+        drawManager.line(OpenMaya.MPoint(0.0,0.0,0.0,1),
+        OpenMaya.MPoint(0.0,1.0+value,0.0,1)) 
+        drawManager.endDrawable()
+
+        # Z軸  
+        drawManager.beginDrawable()
+        color = OpenMaya.MColor([0.0,0.0,1.0])
+        drawManager.setColor( color )
+        drawManager.line(OpenMaya.MPoint(0.0,0.0,0.0,1),
+        OpenMaya.MPoint(0.0,0.0,1.0+value,1))
+        drawManager.endDrawable()
+
+        # ベクトルの表示をしないなら処理をここで終わる
+        if bool ==False:
+            return
+        # 入力されたベクトルの数だけラインを描画する
+        for index in range(len(vetor)):
+
+            # ベクトル情報をマトリクスに変換
+            vec = vetor[index]
+            locat_mat = OpenMaya.MMatrix(
+            [1.0,0.0,0.0,0.0,
+            0.0,1.0,0.0,0.0,
+            0.0,0.0,1.0,0.0,
+            vec[0],vec[1],vec[2],1.0]
+            )    
+            # 自身のマトリクスとかけ合わせて、移動してもベクトルが変化しないようにする
+            trance = locat_mat * matrix.inverse()
+            tra_mat = OpenMaya.MTransformationMatrix(trance)
+            localvec = tra_mat.translation(OpenMaya.MSpace.kWorld)
+            # ラインの描画処理
             drawManager.beginDrawable()
             color = OpenMaya.MColor([1.0,1.0,0.0])
             drawManager.setColor( color )
-            #box
-            drawManager.line(
-   
-            OpenMaya.MPoint(color_r ,color_g,color_b,1),
-            OpenMaya.MPoint(ex,ey,ez,1)
-            ) # ←表示されるボックスのサイズ
+            drawManager.line(OpenMaya.MPoint(0.0,0.0,0.0,1),
+            OpenMaya.MPoint(localvec[0],localvec[1],localvec[2],1)) 
             drawManager.endDrawable()
-
-
-
-            # ボックスの描画処理   
-            drawManager.beginDrawable()
-            color = OpenMaya.MColor([1.0,0.0,0.0])
-            drawManager.setColor( color )
-            #box
-            drawManager.line(
-            OpenMaya.MPoint(0.0,0.0,0.0,1),
-            OpenMaya.MPoint(1.0+value,0.0,0.0,1)
-            ) # ←表示されるボックスのサイズ
-            drawManager.endDrawable()
-
-            # ボックスの描画処理   
-            drawManager.beginDrawable()
-            color = OpenMaya.MColor([0.0,1.0,0.0])
-            drawManager.setColor( color )
-            #box
-            drawManager.line(
-            OpenMaya.MPoint(0.0,0.0,0.0,1),
-            OpenMaya.MPoint(0.0,1.0+value,0.0,1)
-            ) # ←表示されるボックスのサイズ
-            drawManager.endDrawable()
-
-            # ボックスの描画処理   
-            drawManager.beginDrawable()
-            color = OpenMaya.MColor([0.0,0.0,1.0])
-            drawManager.setColor( color )
-            #box
-            drawManager.line(
-            OpenMaya.MPoint(0.0,0.0,0.0,1),
-            OpenMaya.MPoint(0.0,0.0,1.0+value,1)
-            ) # ←表示されるボックスのサイズ
-            drawManager.endDrawable()
-
-
 
         return True
     
